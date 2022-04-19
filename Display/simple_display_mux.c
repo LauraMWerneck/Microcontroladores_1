@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include "simple_display_mux.h"
+#include "bit.h"
 
 /* Tabela de conversão em flash: Anodo comum */
 #ifdef COM_ANODO
