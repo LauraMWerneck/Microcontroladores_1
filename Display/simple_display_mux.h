@@ -27,7 +27,7 @@
   *
   * @retval Nenhum.
   */
-void watchdog_display_mux_init();
+void display_mux_init();
 
 /**
   * @brief  Escrevre nos displays de 7 segmentos.
@@ -37,6 +37,7 @@ void watchdog_display_mux_init();
   *
   * @retval Nenhum.
   */
-void watchdog_display_mux_write(uint8_t data);
+void display_mux_write(uint8_t data);
 
 #endif /* DISPLAY_LEDDISPLAY_H_ */
+
