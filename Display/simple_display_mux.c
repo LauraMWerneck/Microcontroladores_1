@@ -30,30 +30,29 @@ void display_mux_init() {
 void display_mux_write(uint8_t data){
 
     uint8_t d1 = data & 0x0f;
-    uint8_t d2 >> 4;
+    uint8_t d2 = data >> 4;
 
     //for (n=NUMBER_DISPLAYS; n > 0; n--){
         /* Desliga todos os displays */
-        DISP_MUX_PORT_OUT = 0x03;    //// binario: 0000 0011
-
+        DISPLAYS_MUX_PORT_OUT = 0x03;    //// binario: 0000 0011
 
         /* Escreve valor convertido do dígito 1 no GPIO */
-        DISP_DATA_PORT_OUT = convTable[d1];
+        DISPLAYS_DATA_PORT_OUT = convTable[d1];
 
         /* Liga display 1 */
-        CLR_BIT(DISP_MUX_PORT_OUT, BIT0);
+        CLR_BIT(DISPLAYS_MUX_PORT_OUT, BIT0);
 
         /* Mantém um tempo ligado:  */
         _delay_cycles(10000);
 
         /* Desliga display 1 */
-        DISP_MUX_PORT_OUT = 0x03;
+        DISPLAYS_MUX_PORT_OUT = 0x03;
 
         /* Escreve valor convertido do dígito 2 no GPIO */
-        DISP_DATA_PORT_OUT = convTable[d2];
+        DISPLAYS_DATA_PORT_OUT = convTable[d2];
 
         /* Liga display 2 */
-        CLR_BIT(DISP_MUX_PORT_OUT, BIT1);
+        CLR_BIT(DISPLAYS_MUX_PORT_OUT, BIT1);
 
         /* Mantém um tempo ligado */
         _delay_cycles(10000);
