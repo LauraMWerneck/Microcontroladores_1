@@ -1,4 +1,4 @@
-#/*
+/*
  * 02_simple_display_mux.c
  *
  *  Created on: Feb 27, 2020
