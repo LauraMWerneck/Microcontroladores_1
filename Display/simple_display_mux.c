@@ -61,3 +61,24 @@ void display_mux_write(uint8_t data){
 
 }
 
+
+
+
+for (n=0; n < NUMBER_DISPLAYS; n++){
+        /* Desliga todos os displays */
+        DISPLAYS_MUX_PORT_OUT = 0x03; /* ou 3 */
+
+        /* Escreve valor convertido do d gito 1 no GPIO */
+
+
+        DISPLAYS_DATA_PORT_OUT = convTable[(data >> n*4) & 0xf];
+
+        /* Liga display 1 */
+        CLR_BIT (DISPLAYS_MUX_PORT_OUT,   1<<(NUMBER_DISPLAYS - (n + 1)));
+
+        /* Mant m um tempo ligado:  */
+        _delay_cycles(10000);
+
+        /* Desliga display 1 */
+        //DISPLAYS_MUX_PORT_OUT = 0x03;
+    }
