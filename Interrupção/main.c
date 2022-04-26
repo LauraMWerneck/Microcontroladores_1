@@ -8,8 +8,11 @@
 
 #include <msp430.h>
 
-#define LED   BIT0
+#define LED_0   BIT0
+#define LED_1   BIT6
+
 #define BUTTON_0  BIT1
+#define BUTTON_1  BIT3
 
 void config_ext_irq(){
     /* Primeiramente configura porta:
@@ -18,21 +21,27 @@ void config_ext_irq(){
      *
      * Todos pinos como entrada  */
     P4DIR = 0x00;
+    P2DIR = 0x00;
 
     /* Pull up/down */
     P4REN = BUTTON_0;
+    P2REN = BUTTON_1;
 
     /* Pull up */
     P4OUT = BUTTON_0;
+    P2OUT = BUTTON_1;
 
     /* Habilitação da IRQ apenas botão */
     P4IE =  BUTTON_0;
+    P2IE =  BUTTON_1;
 
     /* Transição de nível alto para baixo */
     P4IES = BUTTON_0;
+    P2IES = BUTTON_1;
 
     /* Limpa alguma IRQ pendente */
     P4IFG &= ~BUTTON_0;
+    P2IFG &= ~BUTTON_1;
 }
 
 void main(){
@@ -45,7 +54,8 @@ void main(){
 #endif
 
     /* Configura port do LED */
-    P1DIR = LED;
+    P1DIR = LED_0;
+    P6DIR = LED_1;
 
 
     /* Configura interupções */
@@ -68,8 +78,25 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) Port_4 (void)
 #endif
 {
     /* Liga/desliga LED quando detectado borda no botão */
-    P1OUT ^= LED;
+    P1OUT ^= LED_0;
 
     /* Limpa sinal de IRQ do botão 0 */
     P4IFG &= ~BUTTON_0;
+}
+
+/* Port 2 ISR (interrupt service routine) */
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector=PORT2_VECTOR
+__interrupt void Port_2(void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(PORT6_VECTOR))) Port_2 (void)
+#else
+#error Compiler not supported!
+#endif
+{
+    /* Liga/desliga LED quando detectado borda no botão */
+    P6OUT ^= LED_1;
+
+    /* Limpa sinal de IRQ do botão 0 */
+    P2IFG &= ~BUTTON_1;
 }
