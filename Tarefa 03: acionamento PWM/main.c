@@ -15,6 +15,8 @@
 /* Tipos uint16_t, uint8_t, ... */
 #include <stdint.h>
 
+#include "motor.h"
+
 void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 16MHz
 
     // Configure two FRAM wait state as required by the device data sheet for MCLK
