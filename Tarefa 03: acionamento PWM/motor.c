@@ -18,7 +18,7 @@ enum{DESLIGADO, FRENTE, TRAS, ESQUERDA, DIREITA};
 struct estado_motores{
     uint8_t direcao;
     uint16_t velocidade;
-}
+};
 
 volatile struct estado_motores estado_carrinho = {DESLIGADO, 0};
 
