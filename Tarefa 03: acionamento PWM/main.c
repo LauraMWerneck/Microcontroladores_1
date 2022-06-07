@@ -15,7 +15,22 @@
 /* Tipos uint16_t, uint8_t, ... */
 #include <stdint.h>
 
+#include "gpio.h"
+#include "bits.h"
+
 #include "motor.h"
+
+
+#define BUTTON_PORT_1 P4
+#define BUTTON_1 BIT1
+#define BUTTON_PORT_2 P2
+#define BUTTON_2 BIT3
+
+//#define LED_PORT P1
+//#define LED BIT0
+
+#define BUTTON_SAMPLES (12)
+
 
 void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 16MHz
 
@@ -50,8 +65,25 @@ void init_clock_system(void) {             //Inicia o clock da CPU com frequenci
 }
 
 
+void config_timerB_0(){
+    /* Timer B0:
+     * TASSEL_2 -> Clock de SMCLK.
+     * MC_1 -> Contagem crescente até CCR0.
+     * ID_2 -> Prescaler = /4
+     */
+    TB0CTL = TBSSEL_2 | MC_1 | ID_2;
+
+    /* IRQ por comparação entre contagem e comparador 0 */
+    TB0CCTL0 = CCIE;
+    /* Valor de comparação é 40000 */
+    TB0CCR0 = 40000;
+}
+
+
 void main(void)
 {
+    volatile uint16_t my_data = 0;
+
     /* Para o watchdog timer
      * Necessário para código em depuração */
     WDTCTL = WDTPW | WDTHOLD;
@@ -61,8 +93,20 @@ void main(void)
     PM5CTL0 &= ~LOCKLPM5;
 #endif
 
-    init_clock_system();
 
+    /* Configura botões */
+    /* BUTTON_PORT totalmente como entrada */
+    PORT_DIR(BUTTON_PORT_1) = 0;
+    PORT_DIR(BUTTON_PORT_2) = 0;
+    /* Resistores de pull up */
+    PORT_REN(BUTTON_PORT_1) = BUTTON_1;
+    PORT_OUT(BUTTON_PORT_1) = BUTTON_1;
+    PORT_REN(BUTTON_PORT_2) = BUTTON_2;
+    PORT_OUT(BUTTON_PORT_2) = BUTTON_2;
+
+    /* Configurações de hardware */
+    init_clock_system();
+    config_timerB_0();
     inicializa_motores();
 
 
@@ -88,5 +132,48 @@ void main(void)
 
         /* Código de baixa prioridade da aplicação */
     }
+}
+
+
+/* ISR0 do Timer B: executado no evento de comparação  comparador 0 (TBCCR0)
+ *
+ * Utilizado para o debouncer por amostragem: faz a verificação de botão
+ * periodicamente.
+ *
+ * */
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector=TIMER0_B0_VECTOR
+__interrupt void TIMER0_B0_ISR(void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(TIMER0_B0_VECTOR))) Timer_B (void)
+#else
+#error Compiler not supported!
+#endif
+{
+    static uint8_t counter = BUTTON_SAMPLES;
+
+    /* Se botão 1 apertado: borda de descida */
+    if (!TST_BIT(PORT_IN(BUTTON_POR_1), BUTTON_1))  {
+        /* Se contagem = 0, debounce terminado */
+        if (!(--counter)) {
+
+            /* Colocar aqui código da aplicação referente ao botão */
+            muda_razao_ciclica();
+        }
+    }
+
+    if (!TST_BIT(PORT_IN(BUTTON_POR_2), BUTTON_2))  {
+        /* Se contagem = 0, debounce terminado */
+        if (!(--counter)) {
+
+            /* Colocar aqui código da aplicação referente ao botão */
+
+            /* Acorda função main
+            __bic_SR_register_on_exit(LPM0_bits); */
+        }
+    }
+
+    else
+        counter = BUTTON_SAMPLES;
 }
 
