@@ -15,5 +15,8 @@ void motor_para_frente(uint16_t x);
 
 void motor_para_tras(uint16_t x);
 
+void motor_para_direita(uint16_t x);
+
+void motor_para_esquerda(uint16_t x);
 
 #endif /* MOTOR_H_ */
