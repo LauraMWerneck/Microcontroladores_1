@@ -68,16 +68,25 @@ void main(void)
 
     while(1)
     {
-        void motor_para_frente(2000);
+        //motor_para_frente(2000);
 
-        __delay_cycles(1000);
+        //__delay_cycles(100000);
 
-        void motor_para_tras(2000);
+        //motor_para_tras(2000);
 
-        __delay_cycles(1000);
+        //__delay_cycles(1000000);
 
-        __bis_SR_register(LPM0_bits + GIE);
+        //motor_para_direita(2000);
+
+        //__delay_cycles(1000000);
+
+        motor_para_esquerda(2000);
+
+        //__delay_cycles(1000000);
+
+        //__bis_SR_register(LPM0_bits + GIE);
 
         /* Código de baixa prioridade da aplicação */
     }
 }
+
