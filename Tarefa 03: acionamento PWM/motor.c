@@ -106,8 +106,6 @@ void inicializa_motores(){
 
 void motor_para_frente(uint16_t x){
 
-    void inicializa_motores();
-
     TB3CCTL1 = OUTMOD_6;
     TB3CCTL2 = OUTMOD_0;
     TB3CCTL3 = OUTMOD_6;
@@ -123,8 +121,6 @@ void motor_para_frente(uint16_t x){
 
 void motor_para_tras(uint16_t x){
 
-    void inicializa_motores();
-
     TB3CCTL1 = OUTMOD_0;
     TB3CCTL2 = OUTMOD_6;
     TB3CCTL3 = OUTMOD_0;
@@ -139,8 +135,6 @@ void motor_para_tras(uint16_t x){
 }
 
 void motor_para_direita(uint16_t x){
-
-    void inicializa_motores();
 
     TB3CCTL1 = OUTMOD_6;
     TB3CCTL2 = OUTMOD_0;
@@ -158,8 +152,6 @@ void motor_para_direita(uint16_t x){
 
 void motor_para_esquerda(uint16_t x){
 
-    void inicializa_motores();
-
     TB3CCTL1 = OUTMOD_0;
     TB3CCTL2 = OUTMOD_6;
     TB3CCTL3 = OUTMOD_6;
@@ -170,6 +162,35 @@ void motor_para_esquerda(uint16_t x){
 
     estado_carrinho.direcao = ESQUERDA;
     estado_carrinho.velocidade = x;
+
+}
+
+/* Muda a razao ciclica para + 10% do valor máximo (8000)*/
+void muda_razao_ciclica(){
+
+    estado_carrinho.velocidade = estado_carrinho.velocidade + 800;
+
+    switch(estado_carrinho.direcao){
+    case FRENTE:
+        motor_para_frente(estado_carrinho.velocidade);
+        break;
+    case TRAS:
+        motor_para_frente(estado_carrinho.velocidade);
+        break;
+    case DIREITA:
+        motor_para_frente(estado_carrinho.velocidade);
+        break;
+    case ESQUERDA:
+        motor_para_frente(estado_carrinho.velocidade);
+        break;
+    default:
+        break;
+    }
+
+}
+
+
+void muda_sentido(){
 
 }
 
