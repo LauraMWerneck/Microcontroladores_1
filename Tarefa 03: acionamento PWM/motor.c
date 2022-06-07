@@ -5,7 +5,7 @@
  *  Author: laura
  */
 
-
+#include <msp430.h>
 #include <stdint.h>
 
 #include "motor.h"
@@ -13,16 +13,18 @@
 void config_timerB_3_as_pwm();
 
 
+enum{DESLIGADO, FRENTE, TRAS, ESQUERDA, DIREITA};
+
+struct estado_motores{
+    uint8_t direcao;
+    uint16_t velocidade;
+}
+
+volatile struct estado_motores estado_carrinho = {DESLIGADO, 0};
 
 
-
-
-/**512
+/*
  * @brief  Configura temporizador B3 com contagem up e down.
- *
- * @param  none
- *
- * @retval none
  */
 void config_timerB_3_as_pwm(){
 
@@ -89,6 +91,8 @@ void inicializa_motores(){
      * */
     P6DIR = BIT0 | BIT1 | BIT2 | BIT3;
 
+    P6OUT = 0;
+
     /* Função alternativa: ligação dos pinos no temporizador
      *
      * P6.0 -> TB3.1
@@ -112,6 +116,9 @@ void motor_para_frente(uint16_t x){
     TB3CCR1 = x;
     TB3CCR3 = x;
 
+    estado_carrinho.direcao = FRENTE;
+    estado_carrinho.velocidade = x;
+
 }
 
 void motor_para_tras(uint16_t x){
@@ -126,4 +133,44 @@ void motor_para_tras(uint16_t x){
     TB3CCR2 = x;
     TB3CCR4 = x;
 
+    estado_carrinho.direcao = TRAS;
+    estado_carrinho.velocidade = x;
+
 }
+
+void motor_para_direita(uint16_t x){
+
+    void inicializa_motores();
+
+    TB3CCTL1 = OUTMOD_6;
+    TB3CCTL2 = OUTMOD_0;
+    TB3CCTL3 = OUTMOD_0;
+    TB3CCTL4 = OUTMOD_6;
+
+    TB3CCR1 = x;
+    TB3CCR4 = x;
+
+    estado_carrinho.direcao = DIREITA;
+    estado_carrinho.velocidade = x;
+
+}
+
+
+void motor_para_esquerda(uint16_t x){
+
+    void inicializa_motores();
+
+    TB3CCTL1 = OUTMOD_0;
+    TB3CCTL2 = OUTMOD_6;
+    TB3CCTL3 = OUTMOD_6;
+    TB3CCTL4 = OUTMOD_0;
+
+    TB3CCR2 = x;
+    TB3CCR3 = x;
+
+    estado_carrinho.direcao = ESQUERDA;
+    estado_carrinho.velocidade = x;
+
+}
+
+
