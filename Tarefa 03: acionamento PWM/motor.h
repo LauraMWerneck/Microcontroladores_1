@@ -19,4 +19,9 @@ void motor_para_direita(uint16_t x);
 
 void motor_para_esquerda(uint16_t x);
 
+void muda_razao_ciclica();
+
+void muda_sentido();
+
 #endif /* MOTOR_H_ */
+
