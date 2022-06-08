@@ -191,6 +191,9 @@ void muda_razao_ciclica(){
 
 
 void muda_sentido(){
+    if ....
+    
+    estado_carrinho.direcao++;
 
 }
 
