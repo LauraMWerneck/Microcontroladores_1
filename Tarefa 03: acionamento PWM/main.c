@@ -26,8 +26,6 @@
 #define BUTTON_PORT_2 P2
 #define BUTTON_2 BIT3
 
-//#define LED_PORT P1
-//#define LED BIT0
 
 #define BUTTON_SAMPLES (12)
 
@@ -110,24 +108,10 @@ void main(void)
     inicializa_motores();
 
 
+    __bis_SR_register(LPM0_bits + GIE);
+
     while(1)
     {
-        //motor_para_frente(2000);
-
-        //__delay_cycles(100000);
-
-        //motor_para_tras(2000);
-
-        //__delay_cycles(1000000);
-
-        //motor_para_direita(2000);
-
-        //__delay_cycles(1000000);
-
-        motor_para_esquerda(2000);
-
-        //__delay_cycles(1000000);
-
         //__bis_SR_register(LPM0_bits + GIE);
 
         /* Código de baixa prioridade da aplicação */
@@ -150,30 +134,30 @@ void __attribute__ ((interrupt(TIMER0_B0_VECTOR))) Timer_B (void)
 #error Compiler not supported!
 #endif
 {
-    static uint8_t counter = BUTTON_SAMPLES;
+    static uint8_t counter_b1 = BUTTON_SAMPLES;
+    static uint8_t counter_b2 = BUTTON_SAMPLES;
 
     /* Se botão 1 apertado: borda de descida */
-    if (!TST_BIT(PORT_IN(BUTTON_POR_1), BUTTON_1))  {
+    if (!TST_BIT(PORT_IN(BUTTON_PORT_1), BUTTON_1))  {
         /* Se contagem = 0, debounce terminado */
-        if (!(--counter)) {
+        if (!(--counter_b1)) {
 
-            /* Colocar aqui código da aplicação referente ao botão */
             muda_razao_ciclica();
         }
     }
+    else
+        counter_b1 = BUTTON_SAMPLES;
 
-    if (!TST_BIT(PORT_IN(BUTTON_POR_2), BUTTON_2))  {
+    if (!TST_BIT(PORT_IN(BUTTON_PORT_2), BUTTON_2))  {
         /* Se contagem = 0, debounce terminado */
-        if (!(--counter)) {
+        if (!(--counter_b2)) {
 
-            /* Colocar aqui código da aplicação referente ao botão */
+            muda_sentido();
 
-            /* Acorda função main
-            __bic_SR_register_on_exit(LPM0_bits); */
         }
     }
-
     else
-        counter = BUTTON_SAMPLES;
+        counter_b2 = BUTTON_SAMPLES;
 }
+
 
