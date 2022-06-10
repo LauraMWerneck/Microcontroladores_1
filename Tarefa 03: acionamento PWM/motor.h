@@ -24,4 +24,3 @@ void muda_razao_ciclica();
 void muda_sentido();
 
 #endif /* MOTOR_H_ */
-
