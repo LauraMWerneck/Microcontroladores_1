@@ -21,7 +21,7 @@
 //#define COM_ANODO
 
 #define DISPLAYS_DATA_PORT P3
-#define DISPLAYS_MUX_PORT P1
+#define DISPLAYS_MUX_PORT P5
 
 
 /**
