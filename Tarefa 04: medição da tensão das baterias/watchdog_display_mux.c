@@ -25,7 +25,7 @@ const uint8_t convTable[] = {0x40, 0x79, 0x24, 0x30, 0x19, 0x12, 0x02,
 
 #ifdef COM_CATODO
 const uint8_t convTable[] = {0xbf, 0x86, 0xdb, 0xcf, 0xe6, 0xed, 0xfd,
-        0x87, 0xff, 0xe7, 0xf7, 0xfc, 0xb9, 0xde, 0xf9, 0xf1}
+        0x87, 0xff, 0xe7, 0xf7, 0xfc, 0xb9, 0xde, 0xf9, 0xf1};
 #endif
 
 
@@ -55,9 +55,9 @@ void watchdog_display_mux_init(){
      * WDTIS1+WDTIS0 -> Clock / 64
      *
      */
-    WDTCTL = WDT_ADLY_1_9;
+    WDTCTL = WDT_MDLY_32                                                                                                                        ;
     /* Ativa IRQ do Watchdog */
-    IE1 |= WDTIE;
+    SFRIE1 |= WDTIE;
 }
 
 
@@ -83,13 +83,13 @@ void __attribute__ ((interrupt(WDT_VECTOR))) watchdog_timer (void)
     data = convTable[data];
 
     /* Desliga todos os displays e coloca dado convertido em DISPLAYS_DATA_PORT */
-    PORT_OUT(DISPLAYS_MUX_PORT) &= ~(0x0f);
+    PORT_OUT(DISPLAYS_MUX_PORT) &= ~(0x03);
     PORT_OUT(DISPLAYS_DATA_PORT) = data;
 
     /* Liga cada display independentemente */
     SET_BIT(PORT_OUT(DISPLAYS_MUX_PORT), (1 << my_displays.i));
 
-    /* Faz a variável i circular entre 0 e 3 */
+    /* Faz a variável i circular entre 0 e 1 -> 2 displays */
     my_displays.i++;
     my_displays.i &= 0x01;
 }
