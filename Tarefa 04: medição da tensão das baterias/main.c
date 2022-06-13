@@ -9,7 +9,7 @@
  *      Exemplo de aplicação:
  *
  *      - Utiliza o WatchDog Timer
- *      para multiplexar 4 displays de 7 segmentos.
+ *      para multiplexar 2 displays de 7 segmentos.
  *      - Utiliza IRQ externa para contar número
  *      de pulsos exibindo-os no display.
  *
@@ -21,31 +21,31 @@
 /* Tipos uint16_t, uint8_t, ... */
 #include <stdint.h>
 
-#define BUTTON  BIT0
-#define BUTTON_PORT P1
+#define BUTTON  BIT1
+#define BUTTON_PORT P4
 
 #include "gpio.h"
 #include "watchdog_display_mux.h"
 
 volatile uint16_t i = 0;
 
-#define PULSES  BIT0
+#define PULSES  BIT1
 
 void config_ext_irq(){
     /* Pull up/down */
-    P2REN = PULSES;
+    P4REN = PULSES;
 
     /* Pull up */
-    P2OUT = PULSES;
+    P4OUT = PULSES;
 
     /* Habilitação da IRQ apenas botão */
-    P2IE =  PULSES;
+    P4IE =  PULSES;
 
     /* Transição de nível alto para baixo */
-    P2IES = PULSES;
+    P4IES = PULSES;
 
     /* Limpa alguma IRQ pendente */
-    P2IFG &= ~PULSES;
+    P4IFG &= ~PULSES;
 }
 
 
@@ -58,20 +58,36 @@ void config_ext_irq(){
   *
   * @retval none
   */
-void init_clock_system(){
+void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 8MHz
 
-    /* Configuração do MCLK em 8MHz */
+    // Configure two FRAM wait state as required by the device data sheet for MCLK
+    // operation at 8MHz(beyond 8MHz) _before_ configuring the clock system.
+    FRCTL0 = FRCTLPW | NWAITS_2 ;
 
-    /* Se calibração foi apagada, para aplicação */
-    if (CALBC1_8MHZ==0xFF)
-        while(1);
+    P2SEL1 |= BIT6 | BIT7;                       // P2.6~P2.7: crystal pins
+    do
+    {
+        CSCTL7 &= ~(XT1OFFG | DCOFFG);           // Clear XT1 and DCO fault flag
+        SFRIFG1 &= ~OFIFG;
+    } while (SFRIFG1 & OFIFG);                   // Test oscillator fault flag
 
-    DCOCTL = 0;
-    BCSCTL1 = CALBC1_8MHZ;
-    DCOCTL = CALDCO_8MHZ;
+    __bis_SR_register(SCG0);                     // disable FLL
+    CSCTL3 |= SELREF__XT1CLK;                    // Set XT1 as FLL reference source
+    CSCTL0 = 0;                                  // clear DCO and MOD registers
+    CSCTL1 = DCORSEL_3;                          // Set DCO = 8MHz
+    CSCTL2 = FLLD_0 + 244;                       // DCOCLKDIV = 32735*244 / 1
+    __delay_cycles(3);
+    __bic_SR_register(SCG0);                     // enable FLL
+    while(CSCTL7 & (FLLUNLOCK0 | FLLUNLOCK1));   // FLL locked
 
-    /* Configura ACLK para usar VLO: ~10kHZ */
-    BCSCTL3 |= LFXT1S_2;
+    /* CSCTL4 = SELMS__DCOCLKDIV | SELA__REFOCLK;
+     * set XT1 (~32768Hz) as ACLK source, ACLK = 32768Hz
+     * default DCOCLKDIV as MCLK and SMCLK source
+     - Selects the ACLK source.
+     * 00b = XT1CLK with divider (must be no more than 40 kHz)
+     * 01b = REFO (internal 32-kHz clock source)
+     * 10b = VLO (internal 10-kHz clock source) (1)   */
+    CSCTL4 = SELMS__DCOCLKDIV | SELA__REFOCLK;
 }
 
 void main(void)
@@ -97,10 +113,10 @@ void main(void)
 
 /* Port 1 ISR (interrupt service routine) */
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector=PORT2_VECTOR
-__interrupt void Port_2(void)
+#pragma vector=PORT4_VECTOR
+__interrupt void Port_4(void)
 #elif defined(__GNUC__)
-void __attribute__ ((interrupt(PORT2_VECTOR))) Port_2 (void)
+void __attribute__ ((interrupt(PORT4_VECTOR))) Port_4 (void)
 #else
 #error Compiler not supported!
 #endif
@@ -109,6 +125,6 @@ void __attribute__ ((interrupt(PORT2_VECTOR))) Port_2 (void)
     watchdog_display_mux_write(i++);
 
     /* Limpa sinal de IRQ do botão 0 */
-    P2IFG &= ~PULSES;
+    P4IFG &= ~PULSES;
 }
 
