@@ -16,18 +16,54 @@
  *
  */
 
+
+/*
+ * 06_main_adc_isr_timer_fr2355.c
+ *
+ *  Created on: Oct 02, 2020
+ *      Renan Augusto Starke
+ *      Instituto Federal de Santa Catarina
+ *
+ *      Exemplo do conversor analógico digital.
+ *      - Trigger do ADC pelo timer B1.1
+ *      - Sequẽncia de canais A0->A1->A2
+ *      - ISR do timer desnecessário pois usa-se o hardware
+ *      do timer para iniciar uma nova conversão
+ *
+ *
+ *                  MSP430FR2355
+ *               -----------------
+ *           /|\|              XIN|-
+ *            | |                 |
+ *            --|RST          XOUT|-
+ *              |                 |
+ *  LED    <--  | P1.6    P1.0 A0 | <--
+ *              |         P1.0 A1 | <--
+ *              |         P1.0 A2 | <--
+ *              |                 |
+ *
+ */
+
 #include <msp430.h>
 
 /* Tipos uint16_t, uint8_t, ... */
 #include <stdint.h>
+#include <stdio.h>
 
 #define BUTTON  BIT1
 #define BUTTON_PORT P4
 
+#ifndef __MSP430FR2355__
+#error "Clock system not supported for this device"
+#endif
+
 #include "gpio.h"
+#include "bits.h"
 #include "watchdog_display_mux.h"
 
 volatile uint16_t i = 0;
+
+volatile uint16_t adc_data[3] = {0};
 
 #define PULSES  BIT1
 
@@ -90,6 +126,62 @@ void init_clock_system(void) {             //Inicia o clock da CPU com frequenci
     CSCTL4 = SELMS__DCOCLKDIV | SELA__REFOCLK;
 }
 
+
+/**
+  * @brief  Configura temporizador B1 para trigger do ADC
+  *
+  * @param  none
+  *
+  * @retval none
+  */
+void timerB_init(){
+
+    /* Contagem máxima do timer 1 */
+    TB1CCR0 = 200-1;
+    /* Habilita saída interna do do comparador 0: CCR1 reset/set */
+    TB1CCTL1 = OUTMOD_7;
+    /* Valor de comparação 1: deve ser menor que TB1CCR0 */
+    TB1CCR1 = 100;
+    /* Configura timerB1:
+    * - TBSSEL_2: SMCLK como clock source
+    * - MC_2: modo de contagem contínua
+    * - TBCLR: limpa registrador de contagem
+    */
+    TB1CTL = TBSSEL_2 | MC_2 | TBCLR;
+
+}
+
+
+void init_adc(){
+
+    /* Configura pinos P1.0 a P.2 como entrada do AD */
+    P1SEL0 |=  BIT0 + BIT1 + BIT2;
+    P1SEL1 |=  BIT0 + BIT1 + BIT2;
+
+    /* 16ADCclks, ADC ON */
+    ADCCTL0 |= ADCSHT_2 | ADCON;
+    /* ADC clock MODCLK, sampling timer, TB1.1B trig.,repeat sequence */
+    ADCCTL1 |= ADCSHP | ADCSHS_2 | ADCCONSEQ_3;
+    /* 8-bit conversion results */
+    ADCCTL2 &= ~ADCRES;
+    /* A0~2(EoS); Vref=1.5V */
+    ADCMCTL0 |= ADCINCH_2 | ADCSREF_1;
+    /* Enable ADC ISQ */
+    ADCIE |= ADCIE0;
+
+    /* Configure reference interna  */
+    PMMCTL0_H = PMMPW_H;                                        // Unlock the PMM registers
+    PMMCTL2 |= INTREFEN;                                        // Enable internal reference
+    __delay_cycles(400);                                        // Delay for reference settling
+
+    /* Enable ADC */
+    ADCCTL0 |= ADCENC;
+    /* Limpar timer para maior sincronismo */
+    /* TB1CTL |= TBCLR;  */
+
+}
+
+
 void main(void)
 {
     /* Para o watchdog timer
@@ -109,6 +201,25 @@ void main(void)
 
     /* Entra em modo de economia de energia */
     __bis_SR_register(LPM0_bits + GIE);
+
+
+    //Inicio parte do codigo do AD
+    /* Debug LED */
+    P6DIR |= BIT6;
+
+    /* Sistema de clock:
+     * cuidado em ligar 24MHZ no ADC.
+     * Usar prescaller o MODCLOCK */
+    //init_clock_system();
+    timerB_init();
+    init_adc();
+
+
+    while (1){
+        /* Desliga CPU até ADC terminar */
+        __bis_SR_register(CPUOFF + GIE);
+    }
+
 }
 
 /* Port 1 ISR (interrupt service routine) */
@@ -128,3 +239,79 @@ void __attribute__ ((interrupt(PORT4_VECTOR))) Port_4 (void)
     P4IFG &= ~PULSES;
 }
 
+
+// ADC interrupt service routine
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector=ADC_VECTOR
+__interrupt void ADC_ISR(void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
+#else
+#error Compiler not supported!
+#endif
+{
+    static uint8_t i = 0;
+
+    switch(__even_in_range(ADCIV,ADCIV_ADCIFG))
+    {
+        case ADCIV_NONE:
+            break;
+        case ADCIV_ADCOVIFG:
+            break;
+        case ADCIV_ADCTOVIFG:
+            break;
+        case ADCIV_ADCHIIFG:
+            break;
+        case ADCIV_ADCLOIFG:
+            break;
+        case ADCIV_ADCINIFG:
+            break;
+        case ADCIV_ADCIFG:
+
+            /* Obter amostras */
+            adc_data[i] = ADCMEM0;
+
+            if(i == 0)
+                i = 2;
+            else
+                i--;
+
+            P6OUT ^= BIT6;
+            break;
+        default:
+            break;
+    }
+}
+
+
+/* Timer1 Interrupt Handler */
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector = TIMER1_B1_VECTOR
+__interrupt void TIMER1_B1_ISR(void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
+#else
+#error Compiler not supported!
+#endif
+{
+
+
+}
+
+/* Timer0_B0 interrupt service routine
+ */
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector = TIMER0_B0_VECTOR
+__interrupt void Timer0_B0_ISR (void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(TIMER0_B0_VECTOR))) Timer0_B0_ISR (void)
+#else
+#error Compiler not supported!
+#endif
+{
+    /* Caso trigger do ADC não funcione pelo TB1.1 */
+    while(ADCCTL1 & ADCBUSY);
+    /* Sampling and conversion start */
+    ADCCTL0 |= ADCENC | ADCSC;
+
+}
