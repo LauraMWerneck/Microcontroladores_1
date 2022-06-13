@@ -65,6 +65,7 @@ volatile uint16_t i = 0;
 
 volatile uint16_t adc_data[3] = {0};
 
+
 #define PULSES  BIT1
 
 void config_ext_irq(){
@@ -94,10 +95,10 @@ void config_ext_irq(){
   *
   * @retval none
   */
-void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 8MHz
+void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 16MHz
 
     // Configure two FRAM wait state as required by the device data sheet for MCLK
-    // operation at 8MHz(beyond 8MHz) _before_ configuring the clock system.
+    // operation at 16MHz(beyond 24MHz) _before_ configuring the clock system.
     FRCTL0 = FRCTLPW | NWAITS_2 ;
 
     P2SEL1 |= BIT6 | BIT7;                       // P2.6~P2.7: crystal pins
@@ -110,8 +111,8 @@ void init_clock_system(void) {             //Inicia o clock da CPU com frequenci
     __bis_SR_register(SCG0);                     // disable FLL
     CSCTL3 |= SELREF__XT1CLK;                    // Set XT1 as FLL reference source
     CSCTL0 = 0;                                  // clear DCO and MOD registers
-    CSCTL1 = DCORSEL_3;                          // Set DCO = 8MHz
-    CSCTL2 = FLLD_0 + 244;                       // DCOCLKDIV = 32735*244 / 1
+    CSCTL1 = DCORSEL_5;                          // Set DCO = 16MHz
+    CSCTL2 = FLLD_0 + 489;                       // DCOCLKDIV = 32735*489 / 1
     __delay_cycles(3);
     __bic_SR_register(SCG0);                     // enable FLL
     while(CSCTL7 & (FLLUNLOCK0 | FLLUNLOCK1));   // FLL locked
@@ -148,7 +149,6 @@ void timerB_init(){
     * - TBCLR: limpa registrador de contagem
     */
     TB1CTL = TBSSEL_2 | MC_2 | TBCLR;
-
 }
 
 
@@ -161,11 +161,14 @@ void init_adc(){
     /* 16ADCclks, ADC ON */
     ADCCTL0 |= ADCSHT_2 | ADCON;
     /* ADC clock MODCLK, sampling timer, TB1.1B trig.,repeat sequence */
-    ADCCTL1 |= ADCSHP | ADCSHS_2 | ADCCONSEQ_3;
+    ADCCTL1 |= ADCSHP | ADCSHS_2 | ADCCONSEQ_2;
     /* 8-bit conversion results */
     ADCCTL2 &= ~ADCRES;
+    /* 12-bits conversion results */
+    ADCCTL2 |= ADCRES_2;
+
     /* A0~2(EoS); Vref=1.5V */
-    ADCMCTL0 |= ADCINCH_2 | ADCSREF_1;
+    ADCMCTL0 |= ADCINCH_0 | ADCSREF_0;
     /* Enable ADC ISQ */
     ADCIE |= ADCIE0;
 
@@ -178,9 +181,7 @@ void init_adc(){
     ADCCTL0 |= ADCENC;
     /* Limpar timer para maior sincronismo */
     /* TB1CTL |= TBCLR;  */
-
 }
-
 
 void main(void)
 {
@@ -193,15 +194,13 @@ void main(void)
     PM5CTL0 &= ~LOCKLPM5;
 #endif
 
+    volatile uint32_t tensao_bateria = 0;
+
     init_clock_system();
     config_ext_irq();
 
     /* Inicializa displays */
     watchdog_display_mux_init();
-
-    /* Entra em modo de economia de energia */
-    __bis_SR_register(LPM0_bits + GIE);
-
 
     //Inicio parte do codigo do AD
     /* Debug LED */
@@ -214,12 +213,21 @@ void main(void)
     timerB_init();
     init_adc();
 
+    /* Entra em modo de economia de energia */
+    __bis_SR_register(LPM0_bits + GIE);
+
 
     while (1){
-        /* Desliga CPU até ADC terminar */
-        __bis_SR_register(CPUOFF + GIE);
-    }
 
+        /* Calculo da tensão da bateria
+         * ADC = Vin*2¹²/Vref
+         * Vin = ADC*3,3*10/2¹²
+         * tensao_bateria = (ADC*3,3*10)/2¹² */
+        tensao_bateria = ((uint32_t)adc_data[0]*33) >> 12;
+
+        /* Desliga CPU até ADC terminar */
+        __bis_SR_register(LPM0_bits + GIE);
+    }
 }
 
 /* Port 1 ISR (interrupt service routine) */
@@ -277,6 +285,7 @@ void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
                 i--;
 
             P6OUT ^= BIT6;
+            __bic_SR_register_on_exit(LPM0_bits + GIE);
             break;
         default:
             break;
@@ -298,20 +307,3 @@ void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
 
 }
 
-/* Timer0_B0 interrupt service routine
- */
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector = TIMER0_B0_VECTOR
-__interrupt void Timer0_B0_ISR (void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(TIMER0_B0_VECTOR))) Timer0_B0_ISR (void)
-#else
-#error Compiler not supported!
-#endif
-{
-    /* Caso trigger do ADC não funcione pelo TB1.1 */
-    while(ADCCTL1 & ADCBUSY);
-    /* Sampling and conversion start */
-    ADCCTL0 |= ADCENC | ADCSC;
-
-}
