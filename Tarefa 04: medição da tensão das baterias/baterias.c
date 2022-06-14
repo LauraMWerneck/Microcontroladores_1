@@ -44,14 +44,20 @@
 #include "watchdog_display_mux.h"
 #include "baterias.h"
 
+volatile uint8_t info = 0;
 volatile uint16_t adc_data[3] = {0};   //Vetor de 16 bits sem sinal
+
+
+uint8_t get_info(){
+    return info;
+}
 
 
 /* Configura temporizador B1 para trigger do ADC */
 void timerB_init(){
 
     /* Contagem máxima do timer 1 */
-    TB1CCR0 = 200-1;                   // Da a frequencia de amostragem
+    TB1CCR0 = 32000-1;                   // Da a frequencia de amostragem
     /* Habilita saída interna do do comparador 0: CCR1 reset/set */
     TB1CCTL1 = OUTMOD_7;
     /* Valor de comparação 1: deve ser menor que TB1CCR0 */
@@ -61,7 +67,10 @@ void timerB_init(){
     * - MC_2: modo de contagem contínua
     * - TBCLR: limpa registrador de contagem
     */
-    TB1CTL = TBSSEL_2 | MC_2 | TBCLR;
+
+    //TB1CCTL0 |= CCIE;
+
+    TB1CTL = TBSSEL_2 | MC_1 | TBCLR;
 }
 
 
@@ -127,6 +136,15 @@ void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
 #endif
 {
     static uint8_t i = 0;
+    static uint16_t contador = 0;
+
+    contador++;
+    if (contador == 1000){
+        contador = 0;
+        info++;
+    }
+
+    info &= 0x01;
 
     switch(__even_in_range(ADCIV,ADCIV_ADCIFG))
     {
@@ -163,8 +181,8 @@ void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
 
 /* Timer1 Interrupt Handler */
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector = TIMER1_B1_VECTOR
-__interrupt void TIMER1_B1_ISR(void)
+#pragma vector = TIMER1_B0_VECTOR
+__interrupt void TIMER1_B0_ISR(void)
 #elif defined(__GNUC__)
 void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
 #else
