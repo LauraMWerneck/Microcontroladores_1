@@ -5,43 +5,12 @@
  *      Author: Renan Augusto Starke
  *      Instituto Federal de Santa Catarina
  *
- *
  *      Exemplo de aplicação:
  *
  *      - Utiliza o WatchDog Timer
  *      para multiplexar 2 displays de 7 segmentos.
  *      - Utiliza IRQ externa para contar número
  *      de pulsos exibindo-os no display.
- *
- *
- */
-
-
-/*
- * 06_main_adc_isr_timer_fr2355.c
- *
- *  Created on: Oct 02, 2020
- *      Renan Augusto Starke
- *      Instituto Federal de Santa Catarina
- *
- *      Exemplo do conversor analógico digital.
- *      - Trigger do ADC pelo timer B1.1
- *      - Sequẽncia de canais A0->A1->A2
- *      - ISR do timer desnecessário pois usa-se o hardware
- *      do timer para iniciar uma nova conversão
- *
- *
- *                  MSP430FR2355
- *               -----------------
- *           /|\|              XIN|-
- *            | |                 |
- *            --|RST          XOUT|-
- *              |                 |
- *  LED    <--  | P1.6    P1.0 A0 | <--
- *              |         P1.0 A1 | <--
- *              |         P1.0 A2 | <--
- *              |                 |
- *
  */
 
 #include <msp430.h>
@@ -50,9 +19,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define BUTTON  BIT1
-#define BUTTON_PORT P4
-
 #ifndef __MSP430FR2355__
 #error "Clock system not supported for this device"
 #endif
@@ -60,14 +26,18 @@
 #include "gpio.h"
 #include "bits.h"
 #include "watchdog_display_mux.h"
+#include "baterias.h"
 
-volatile uint16_t i = 0;
-
-volatile uint16_t adc_data[3] = {0};
-
-
+// Botao para interrupcao do display
+#define BUTTON  BIT1
+#define BUTTON_PORT P4
 #define PULSES  BIT1
 
+// i é usado para incrementar o valor do display
+volatile uint16_t i = 0;
+
+
+// Configuração de IRQ para os botões usados com os displays
 void config_ext_irq(){
     /* Pull up/down */
     P4REN = PULSES;
@@ -86,14 +56,10 @@ void config_ext_irq(){
 }
 
 
-/**
-  * @brief  Configura sistema de clock para usar o Digitally Controlled Oscillator (DCO).
-  *         Utililiza-se as calibrações internas gravadas na flash.
-  *         Exemplo baseado na documentação da Texas: msp430g2xxx3_dco_calib.c
-  *         Configura ACLK para utilizar VLO = ~10KHz
-  * @param  none
-  *
-  * @retval none
+/**   Configura sistema de clock para usar o Digitally Controlled Oscillator (DCO).
+  *   Utililiza-se as calibrações internas gravadas na flash.
+  *   Exemplo baseado na documentação da Texas: msp430g2xxx3_dco_calib.c
+  *   Configura ACLK para utilizar VLO = ~10KHz
   */
 void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 16MHz
 
@@ -128,61 +94,6 @@ void init_clock_system(void) {             //Inicia o clock da CPU com frequenci
 }
 
 
-/**
-  * @brief  Configura temporizador B1 para trigger do ADC
-  *
-  * @param  none
-  *
-  * @retval none
-  */
-void timerB_init(){
-
-    /* Contagem máxima do timer 1 */
-    TB1CCR0 = 200-1;
-    /* Habilita saída interna do do comparador 0: CCR1 reset/set */
-    TB1CCTL1 = OUTMOD_7;
-    /* Valor de comparação 1: deve ser menor que TB1CCR0 */
-    TB1CCR1 = 100;
-    /* Configura timerB1:
-    * - TBSSEL_2: SMCLK como clock source
-    * - MC_2: modo de contagem contínua
-    * - TBCLR: limpa registrador de contagem
-    */
-    TB1CTL = TBSSEL_2 | MC_2 | TBCLR;
-}
-
-
-void init_adc(){
-
-    /* Configura pinos P1.0 a P.2 como entrada do AD */
-    P1SEL0 |=  BIT0 + BIT1 + BIT2;
-    P1SEL1 |=  BIT0 + BIT1 + BIT2;
-
-    /* 16ADCclks, ADC ON */
-    ADCCTL0 |= ADCSHT_2 | ADCON;
-    /* ADC clock MODCLK, sampling timer, TB1.1B trig.,repeat sequence */
-    ADCCTL1 |= ADCSHP | ADCSHS_2 | ADCCONSEQ_2;
-    /* 8-bit conversion results */
-    ADCCTL2 &= ~ADCRES;
-    /* 12-bits conversion results */
-    ADCCTL2 |= ADCRES_2;
-
-    /* A0~2(EoS); Vref=1.5V */
-    ADCMCTL0 |= ADCINCH_0 | ADCSREF_0;
-    /* Enable ADC ISQ */
-    ADCIE |= ADCIE0;
-
-    /* Configure reference interna  */
-    PMMCTL0_H = PMMPW_H;                                        // Unlock the PMM registers
-    PMMCTL2 |= INTREFEN;                                        // Enable internal reference
-    __delay_cycles(400);                                        // Delay for reference settling
-
-    /* Enable ADC */
-    ADCCTL0 |= ADCENC;
-    /* Limpar timer para maior sincronismo */
-    /* TB1CTL |= TBCLR;  */
-}
-
 void main(void)
 {
     /* Para o watchdog timer
@@ -194,43 +105,52 @@ void main(void)
     PM5CTL0 &= ~LOCKLPM5;
 #endif
 
-    volatile uint32_t tensao_bateria = 0;
-
+    /* Inicializa siatema de clock */
     init_clock_system();
+
+    /* Inicializa configuracao da IRQ */
     config_ext_irq();
 
     /* Inicializa displays */
     watchdog_display_mux_init();
 
-    //Inicio parte do codigo do AD
-    /* Debug LED */
-    P6DIR |= BIT6;
-
-    /* Sistema de clock:
-     * cuidado em ligar 24MHZ no ADC.
-     * Usar prescaller o MODCLOCK */
-    //init_clock_system();
     timerB_init();
+
     init_adc();
+
+    uint32_t bateria_1 = 0;
+
+    uint16_t primeiro_digito = 0;
+
+    uint16_t segundo_digito = 0;
+
+    uint16_t data = 0;
 
     /* Entra em modo de economia de energia */
     __bis_SR_register(LPM0_bits + GIE);
 
-
     while (1){
 
-        /* Calculo da tensão da bateria
-         * ADC = Vin*2¹²/Vref
-         * Vin = ADC*3,3*10/2¹²
-         * tensao_bateria = (ADC*3,3*10)/2¹² */
-        tensao_bateria = ((uint32_t)adc_data[0]*33) >> 12;
+       bateria_1 = medicao_baterias();
+
+       primeiro_digito = bateria_1/10;
+
+       segundo_digito = bateria_1 % 10;
+
+       data = segundo_digito;
+
+       data |= primeiro_digito << 4;
+
+       watchdog_display_mux_write(data);
 
         /* Desliga CPU até ADC terminar */
         __bis_SR_register(LPM0_bits + GIE);
     }
 }
 
-/* Port 1 ISR (interrupt service routine) */
+/* Port 1 ISR (interrupt service routine)
+ * Interrupcao de quando detecta borda de sibida no
+ * botao e ai avanca um numero no display. */
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
 #pragma vector=PORT4_VECTOR
 __interrupt void Port_4(void)
@@ -246,64 +166,3 @@ void __attribute__ ((interrupt(PORT4_VECTOR))) Port_4 (void)
     /* Limpa sinal de IRQ do botão 0 */
     P4IFG &= ~PULSES;
 }
-
-
-// ADC interrupt service routine
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector=ADC_VECTOR
-__interrupt void ADC_ISR(void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
-#else
-#error Compiler not supported!
-#endif
-{
-    static uint8_t i = 0;
-
-    switch(__even_in_range(ADCIV,ADCIV_ADCIFG))
-    {
-        case ADCIV_NONE:
-            break;
-        case ADCIV_ADCOVIFG:
-            break;
-        case ADCIV_ADCTOVIFG:
-            break;
-        case ADCIV_ADCHIIFG:
-            break;
-        case ADCIV_ADCLOIFG:
-            break;
-        case ADCIV_ADCINIFG:
-            break;
-        case ADCIV_ADCIFG:
-
-            /* Obter amostras */
-            adc_data[i] = ADCMEM0;
-
-            if(i == 0)
-                i = 2;
-            else
-                i--;
-
-            P6OUT ^= BIT6;
-            __bic_SR_register_on_exit(LPM0_bits + GIE);
-            break;
-        default:
-            break;
-    }
-}
-
-
-/* Timer1 Interrupt Handler */
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector = TIMER1_B1_VECTOR
-__interrupt void TIMER1_B1_ISR(void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
-#else
-#error Compiler not supported!
-#endif
-{
-
-
-}
-
