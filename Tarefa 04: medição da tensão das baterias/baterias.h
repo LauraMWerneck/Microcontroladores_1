@@ -13,6 +13,7 @@ void timerB_init();
 void init_adc();
 
 uint32_t medicao_baterias();
+uint8_t get_info();
 
 
 #endif /* BATERIAS_H_ */
