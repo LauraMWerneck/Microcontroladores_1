@@ -28,33 +28,6 @@
 #include "watchdog_display_mux.h"
 #include "baterias.h"
 
-// Botao para interrupcao do display
-#define BUTTON  BIT1
-#define BUTTON_PORT P4
-#define PULSES  BIT1
-
-// i é usado para incrementar o valor do display
-volatile uint16_t i = 0;
-
-
-// Configuração de IRQ para os botões usados com os displays
-void config_ext_irq(){
-    /* Pull up/down */
-    P4REN = PULSES;
-
-    /* Pull up */
-    P4OUT = PULSES;
-
-    /* Habilitação da IRQ apenas botão */
-    P4IE =  PULSES;
-
-    /* Transição de nível alto para baixo */
-    P4IES = PULSES;
-
-    /* Limpa alguma IRQ pendente */
-    P4IFG &= ~PULSES;
-}
-
 
 /**   Configura sistema de clock para usar o Digitally Controlled Oscillator (DCO).
   *   Utililiza-se as calibrações internas gravadas na flash.
@@ -108,9 +81,6 @@ void main(void)
     /* Inicializa siatema de clock */
     init_clock_system();
 
-    /* Inicializa configuracao da IRQ */
-    config_ext_irq();
-
     /* Inicializa displays */
     watchdog_display_mux_init();
 
@@ -146,23 +116,4 @@ void main(void)
         /* Desliga CPU até ADC terminar */
         __bis_SR_register(LPM0_bits + GIE);
     }
-}
-
-/* Port 1 ISR (interrupt service routine)
- * Interrupcao de quando detecta borda de sibida no
- * botao e ai avanca um numero no display. */
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector=PORT4_VECTOR
-__interrupt void Port_4(void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(PORT4_VECTOR))) Port_4 (void)
-#else
-#error Compiler not supported!
-#endif
-{
-    /* Liga/desliga LED quando detectado borda no botão */
-    watchdog_display_mux_write(i++);
-
-    /* Limpa sinal de IRQ do botão 0 */
-    P4IFG &= ~PULSES;
 }
