@@ -30,10 +30,10 @@
 
 
 /**   Configura sistema de clock para usar o Digitally Controlled Oscillator (DCO).
-  *   Utililiza-se as calibrações internas gravadas na flash.
-  *   Exemplo baseado na documentação da Texas: msp430g2xxx3_dco_calib.c
-  *   Configura ACLK para utilizar VLO = ~10KHz
-  */
+ *   Utililiza-se as calibrações internas gravadas na flash.
+ *   Exemplo baseado na documentação da Texas: msp430g2xxx3_dco_calib.c
+ *   Configura ACLK para utilizar VLO = ~10KHz
+ */
 void init_clock_system(void) {             //Inicia o clock da CPU com frequencia de 16MHz
 
     // Configure two FRAM wait state as required by the device data sheet for MCLK
@@ -69,6 +69,12 @@ void init_clock_system(void) {             //Inicia o clock da CPU com frequenci
 
 void main(void)
 {
+    uint32_t bateria_1 = 0;
+    uint32_t bateria_2 = 0;
+    uint16_t primeiro_digito = 0;
+    uint16_t segundo_digito = 0;
+    uint16_t data = 0;
+
     /* Para o watchdog timer
      * Necessário para código em depuração */
     WDTCTL = WDTPW | WDTHOLD;
@@ -88,30 +94,25 @@ void main(void)
 
     init_adc();
 
-    uint32_t bateria_1 = 0;
-
-    uint16_t primeiro_digito = 0;
-
-    uint16_t segundo_digito = 0;
-
-    uint16_t data = 0;
-
     /* Entra em modo de economia de energia */
     __bis_SR_register(LPM0_bits + GIE);
 
     while (1){
 
-       bateria_1 = medicao_baterias();
+        bateria_1 = medicao_baterias();
 
-       primeiro_digito = bateria_1/10;
+        if (get_info())  {
+            primeiro_digito = bateria_1/10;
+            segundo_digito = bateria_1 % 10;
+        }
+        else {
+            primeiro_digito = bateria_2/10;
+            segundo_digito = bateria_2 % 10;
+        }
 
-       segundo_digito = bateria_1 % 10;
-
-       data = segundo_digito;
-
-       data |= primeiro_digito << 4;
-
-       watchdog_display_mux_write(data);
+        data = segundo_digito;
+        data |= primeiro_digito << 4;
+        watchdog_display_mux_write(data);
 
         /* Desliga CPU até ADC terminar */
         __bis_SR_register(LPM0_bits + GIE);
