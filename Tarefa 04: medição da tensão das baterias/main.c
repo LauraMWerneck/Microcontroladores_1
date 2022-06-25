@@ -1,17 +1,17 @@
 /*
- * 02_simple_display_mux.c
+ * Tarefa 04: medição da tensão das baterias
  *
- *  Created on: Feb 27, 2020
- *      Author: Renan Augusto Starke
- *      Instituto Federal de Santa Catarina
+ * Nome: Laura Martin  Werneck
  *
- *      Exemplo de aplicação:
+ * Data: 14 de jun de 2022
  *
- *      - Utiliza o WatchDog Timer
- *      para multiplexar 2 displays de 7 segmentos.
- *      - Utiliza IRQ externa para contar número
- *      de pulsos exibindo-os no display.
- */
+ * Descrição: Utilizando o conversor analógico digital, temporizadores e
+ * interrupções, implemente a medição e proteção da tensão das baterias
+ * de um carrinho autônomo conforme o projeto disponibilizado pelo professor.
+ * A tensão de cada célula, são duas baterias em série, não deve ser menor que 3.1V.
+ * Exiba os valores da tensão das baterias em dois displays multiplexados.
+ *
+ * */
 
 #include <msp430.h>
 
@@ -99,7 +99,10 @@ void main(void)
 
     while (1){
 
-        bateria_1 = medicao_baterias();
+        bateria_1 = medicao_bateria_1();
+        bateria_2 = medicao_bateria_2();
+
+        bateria_1 = bateria_1 - bateria_2;
 
         if (get_info())  {
             primeiro_digito = bateria_1/10;
@@ -111,10 +114,11 @@ void main(void)
         }
 
         data = segundo_digito;
-        data |= primeiro_digito << 4;
+        data |= primeiro_digito << 4;       //Coloca o primeiro digito deslocado para ficar na primeira "caixinha"
         watchdog_display_mux_write(data);
 
         /* Desliga CPU até ADC terminar */
         __bis_SR_register(LPM0_bits + GIE);
     }
 }
+
