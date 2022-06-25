@@ -1,31 +1,18 @@
 /*
  * baterias.c
  *
- *  Created on: 14 de jun de 2022
- *      Author: Aluno
+ * Nome: Laura Martin Werneck
  *
+ * Data: 14 de jun de 2022
  *
- * 06_main_adc_isr_timer_fr2355.c
- *
- *  Created on: Oct 02, 2020
- *      Renan Augusto Starke
- *      Instituto Federal de Santa Catarina
- *
- *      Exemplo do conversor analógico digital.
- *      - Trigger do ADC pelo timer B1.1
- *      - Sequẽncia de canais A0->A1->A2
- *      - ISR do timer desnecessário pois usa-se o hardware
- *      do timer para iniciar uma nova conversão
+ * Descrição: Módulo responsável pelas funções das baterias.
  *
  *                  MSP430FR2355
  *               -----------------
- *           /|\|              XIN|-
- *            | |                 |
- *            --|RST          XOUT|-
  *              |                 |
- *  LED    <--  | P1.6    P1.0 A0 | <--
- *              |         P1.0 A1 | <--
- *              |         P1.0 A2 | <--
+ *              |         P1.0 A0 | <-- Não utilizado
+ *              |         P1.0 A1 | <-- Bat1
+ *              |         P1.0 A2 | <-- Bat2
  *              |                 |
  */
 
@@ -82,15 +69,15 @@ void init_adc(){
 
     /* 16ADCclks, ADC ON */
     ADCCTL0 |= ADCSHT_2 | ADCON;   // Liga o ADC
-    /* ADC clock MODCLK, sampling timer, TB1.1B trig.,repeat sequence */
+    /* ADC clock MODCLK, sampling timer, TB1.1B trig.,repeat mudar */
     ADCCTL1 |= ADCSHP | ADCSHS_2 | ADCCONSEQ_2;
     /* 8-bit conversion results */
     ADCCTL2 &= ~ADCRES;
     /* 12-bits conversion results */
     ADCCTL2 |= ADCRES_2;                    //Configura como sendo de 12 bits
 
-    /* A0~2(EoS); Vref=1.5V */
-    ADCMCTL0 |= ADCINCH_0 | ADCSREF_0;
+    /* A1~2(EoS); Vref=3.3V */
+    ADCMCTL0 |= ADCINCH_1 | ADCSREF_0;
     /* Enable ADC ISQ */
     ADCIE |= ADCIE0;
 
@@ -105,7 +92,7 @@ void init_adc(){
     /* TB1CTL |= TBCLR;  */
 }
 
-uint32_t medicao_baterias(){
+uint32_t medicao_bateria_1(){
 
     volatile uint32_t tensao_bateria = 0;
 
@@ -118,9 +105,34 @@ uint32_t medicao_baterias(){
      * Vin = ADC*3,3*10/2¹²
      * tensao_bateria = (ADC*3,3*10)/2¹²
      * Tem o uint32_t antes do adc para tranformar ele em um número de 32 bits. */
-    tensao_bateria = ((uint32_t)adc_data[0]*33) >> 12;
+    //tensao_bateria = ((uint32_t)adc_data[0]*33) >> 12;
+    tensao_bateria_1 = (uint32_t)adc_data[0]/3;
+    tensao_bateria_1 = (tensao_bateria_1*33) >> 12;
 
-    return tensao_bateria;
+    return tensao_bateria_1;
+
+}
+
+
+
+uint32_t medicao_bateria_2(){
+
+    volatile uint32_t tensao_bateria = 0;
+
+    //Inicio parte do codigo do AD
+    /* Debug LED */
+    P6DIR |= BIT6;
+
+    /* Calculo da tensão da bateria
+     * ADC = Vin*2¹²/Vref
+     * Vin = ADC*3,3*10/2¹²
+     * tensao_bateria = (ADC*3,3*10)/2¹²
+     * Tem o uint32_t antes do adc para tranformar ele em um número de 32 bits. */
+    //tensao_bateria_2 = ((uint32_t)adc_data[1]*33) >> 12; /// Mudar o calculo para depender do ganho
+    tensao_bateria_2 = (uint32_t)adc_data[1]*10/15;
+    tensao_bateria_2 = (tensao_bateria_2*33) >> 12;
+
+    return tensao_bateria_2;
 
 }
 
@@ -163,12 +175,19 @@ void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
         case ADCIV_ADCIFG:
 
             /* Obter amostras */
-            adc_data[i] = ADCMEM0;
+            adc_data[i] = ADCMEM0;       // Valor lido pelo canal 1
+
+            ADCMCTL0 &= ~ 0x03;          // Zera os dois ultimos bits
 
             if(i == 0)
-                i = 2;
+                ADCMCTL0 |= ADCINCH_2 | ADCSREF_0;
             else
-                i--;
+                ADCMCTL0 |= ADCINCH_1 | ADCSREF_0;
+
+            i++;
+
+            i = i & 0x01;
+
 
             P6OUT ^= BIT6;
             __bic_SR_register_on_exit(LPM0_bits + GIE);
@@ -192,4 +211,8 @@ void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
 
 
 }
+
+
+
+
 
