@@ -94,6 +94,8 @@ void main(void)
 
     init_adc();
 
+    P2DIR = BIT0 | BIT2;
+
     /* Entra em modo de economia de energia */
     __bis_SR_register(LPM0_bits + GIE);
 
@@ -107,10 +109,14 @@ void main(void)
         if (get_info())  {
             primeiro_digito = bateria_1/10;
             segundo_digito = bateria_1 % 10;
+
+            P2OUT ^= BIT0;
         }
         else {
             primeiro_digito = bateria_2/10;
             segundo_digito = bateria_2 % 10;
+
+            P2OUT ^= BIT2;
         }
 
         data = segundo_digito;
@@ -121,4 +127,5 @@ void main(void)
         __bis_SR_register(LPM0_bits + GIE);
     }
 }
+
 
