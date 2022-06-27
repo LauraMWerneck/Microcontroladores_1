@@ -57,7 +57,7 @@ void timerB_init(){
 
     //TB1CCTL0 |= CCIE;
 
-    TB1CTL = TBSSEL_2 | MC_1 | TBCLR;
+    TB1CTL = TBSSEL_2 | MC_1 | ID_3| TBCLR;
 }
 
 
@@ -94,19 +94,20 @@ void init_adc(){
 
 uint32_t medicao_bateria_1(){
 
-    volatile uint32_t tensao_bateria = 0;
+    volatile uint32_t tensao_bateria_1 = 0;
 
     //Inicio parte do codigo do AD
     /* Debug LED */
-    P6DIR |= BIT6;
+    //P6DIR |= BIT6;
 
     /* Calculo da tensão da bateria
      * ADC = Vin*2¹²/Vref
      * Vin = ADC*3,3*10/2¹²
-     * tensao_bateria = (ADC*3,3*10)/2¹²
+     * Vin = bat*1/3
+     * tensao_bateria = (ADC*3,3*10*3)/2¹²
      * Tem o uint32_t antes do adc para tranformar ele em um número de 32 bits. */
     //tensao_bateria = ((uint32_t)adc_data[0]*33) >> 12;
-    tensao_bateria_1 = (uint32_t)adc_data[0]/3;
+    tensao_bateria_1 = (uint32_t)adc_data[0]*3;
     tensao_bateria_1 = (tensao_bateria_1*33) >> 12;
 
     return tensao_bateria_1;
@@ -117,20 +118,21 @@ uint32_t medicao_bateria_1(){
 
 uint32_t medicao_bateria_2(){
 
-    volatile uint32_t tensao_bateria = 0;
+    volatile uint32_t tensao_bateria_2 = 0;
 
     //Inicio parte do codigo do AD
     /* Debug LED */
-    P6DIR |= BIT6;
+    //P6DIR |= BIT6;
 
     /* Calculo da tensão da bateria
      * ADC = Vin*2¹²/Vref
      * Vin = ADC*3,3*10/2¹²
-     * tensao_bateria = (ADC*3,3*10)/2¹²
+     * Vin = bat*2/3
+     * tensao_bateria = (ADC*3,3*10*3)/2¹²*2
      * Tem o uint32_t antes do adc para tranformar ele em um número de 32 bits. */
     //tensao_bateria_2 = ((uint32_t)adc_data[1]*33) >> 12; /// Mudar o calculo para depender do ganho
-    tensao_bateria_2 = (uint32_t)adc_data[1]*10/15;
-    tensao_bateria_2 = (tensao_bateria_2*33) >> 12;
+    tensao_bateria_2 = (uint32_t)adc_data[1]*3;
+    tensao_bateria_2 = (tensao_bateria_2*33) >> 13;
 
     return tensao_bateria_2;
 
@@ -148,15 +150,18 @@ void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
 #endif
 {
     static uint8_t i = 0;
-    static uint16_t contador = 0;
 
-    contador++;
-    if (contador == 1000){
-        contador = 0;
+    static uint16_t contador_main = 0;
+
+
+    contador_main++;
+    if (contador_main == 100){
+        contador_main = 0;
         info++;
-    }
+        info &= 0x01;
 
-    info &= 0x01;
+        __bic_SR_register_on_exit(LPM0_bits + GIE);
+    }
 
     switch(__even_in_range(ADCIV,ADCIV_ADCIFG))
     {
@@ -189,8 +194,8 @@ void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
             i = i & 0x01;
 
 
-            P6OUT ^= BIT6;
-            __bic_SR_register_on_exit(LPM0_bits + GIE);
+
+
             break;
         default:
             break;
