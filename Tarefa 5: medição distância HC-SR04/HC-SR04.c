@@ -34,7 +34,7 @@
 /* Tipos uint16_t, uint8_t, ... */
 #include <stdint.h>
 
-#include <lib/bits.h>
+#include <bits.h>
 
 
 #ifndef __MSP430FR2355__
@@ -179,8 +179,5 @@ void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
         __bic_SR_register_on_exit(LPM0_bits); */
     }
 }
-
-
-
 
 
