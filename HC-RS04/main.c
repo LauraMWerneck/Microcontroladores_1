@@ -1,9 +1,20 @@
 
+/*  Tarefa 05: medição distância HC-SR04
+ *
+ *  Nome: Laura Martin Werneck
+ *
+ *  Data: 04/07/2022
+ *
+ *  Descrição: Utilizando um timer um modo captura, implemente uma aplicação
+ *  que estima a distância em relação a objetos através de um sensor HC-SR04.
+ *
+ * */
+
 
 #include <msp430.h>
 /* Tipos uint16_t, uint8_t, ... */
 #include <stdint.h>
-#include <bits.h>
+#include "bits.h"
 #include "gpio.h"
 #include "distancia.h"
 
@@ -15,6 +26,7 @@
 /* Pinos de hardware que o sensor esta conectado */
 #define SENSOR_PORT P2
 #define SENSOR_PIN BIT0
+
 
 
 /* Configura sistema de clock para usar o Digitally Controlled Oscillator (DCO) em 24MHz
@@ -53,18 +65,15 @@ void init_clock_system(void) {
 
 
 
-
 /* Configura temporizador watchdog */
 void config_wd_as_timer(){
     /* Configura Watch dog como temporizador:
      *
-     * WDT_ADLY_1000 <= (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS2+WDTSSEL0)
-     *
+     * WDT_ADLY_250 <= (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS2+WDTSSEL0+WDTIS0)
      * WDTPW -> "Senha" para alterar confgiuração.
      * WDTTMSEL -> Temporizador ao invés de reset.
      * WDTSSEL -> Fonte de clock de ACLK
-     * WDTIS2 -> Período de 1000ms com ACLK = 32.768Hz
-     *
+     * WDTIS2 -> Período de 250ms com ACLK = 32.768Hz
      */
     WDTCTL = WDT_ADLY_250;
     /* Ativa IRQ do Watchdog */
@@ -85,10 +94,12 @@ void main(void)
     /* Configurações de hardware */
     init_clock_system();
 
-    //config_timerB_1();
+    config_timerB_1();
     config_wd_as_timer();
 
+
     volatile uint32_t distancia = 0;
+
 
     /* Configura o pino P2.4 como saida
      * Pino responsavel por receber o trigger imput
@@ -96,12 +107,9 @@ void main(void)
     P2DIR = BIT4;
     P2OUT = 0;   // Inicializa em nivel logico baixo
 
-    /* Pull ups */   // -> Mudar para P2.1
-    P2REN = BIT0;
-    P2OUT = BIT0;
-
-    /* Input capture for P2.0 */   // -> Mudar para P2.1
-    P2SEL0 = 0x1;
+    /* Input capture for P2.1 */  // Ver se é assim mesmo
+    P2SEL0 = BIT1;
+    P2SEL1 = BIT1;
 
     __bis_SR_register(GIE);
 
@@ -112,7 +120,9 @@ void main(void)
 
         /* Entra em modo de economia de energia */
         __bis_SR_register(LPM0_bits + GIE);
-       //distancia = medicao_distancia();
+
+       distancia = medicao_distancia();
+
     }
 }
 
