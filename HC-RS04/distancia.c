@@ -1,16 +1,15 @@
 /*
- * distancia.c
+ *  Modulo: distancia.c
  *
- *  Created on: 04/07/2022
- *      Author: laura
- */
-/*
- * 05_main_timer_input_comparator.c
+ *  Nome: Laura Martin Werneck
  *
- *      Exemplo de parcial de aplicação:
+ *  Data: 04/07/2022
  *
- *      - Utiliza o evento de captura do Timer para borda
- *      de subida e descida de uma porta.
+ *  Descrição: Utilizando um timer em modo captura, configura as funcoes
+ *  para medicao da distancia utilizando o sensor HC-SR04.
+ *
+ *  - Utiliza o evento de captura do Timer para borda
+ *    de subida e descida de uma porta.
  *
  *                MSP430FR2355
  *            -----------------
@@ -37,38 +36,48 @@
 volatile uint16_t distancia = 0;
 
 
-/* Configura temporizador A */
+/* Configura temporizador B1.2 */
 void config_timerB_1(){
-    /* Configura comparador 1 do timer B:
+    /* Configura comparador 2 do timer B:
      * CM_3: captura de borda de subida e descida
      * CCIS_0: entrada A
      * CCIE: ativa IRQ
      * CAP: modo captura
      * SCS: captura síncrona
      */
-    TB1CCTL1 |= CM_3 | CCIS_0 | CCIE | CAP | SCS;   // -> Mudar para CCR2
+    TB1CCTL2 |= CM_3 | CCIS_1 | CCIE | CAP | SCS;
 
-    /* Configura timerB1:
+    /* Configura timer B1.2:
      * - TBSSEL_2: SMCLK como clock source
      * - MC_2: modo de contagem contínua
      * - TBCLR: limpa registrador de contagem
      */
-    TB1CTL |= TBSSEL_2 | MC_2 | TBCLR;   // -> Mudar para CCR2
+    TB1CTL |= TBSSEL_2 | MC_2 | TBCLR | ID_3;   // Duvida se esta certo ou se tem que por TB1.2...
 }
 
+/* Funcao para criar o trigger de acionamento do sensor.
+ * Para isso coloca a sida do pino em nivel logico alto
+ * por 10us e depois coloca o pino em nivel logico baixo. */
 void trigger(){
 
+    /* Coloca a saida do pino P2.4 em nivel logico alto */
     SET_BIT(P2OUT,BIT4);
 
-    __delay_cycles(240);   // Ver o cálculo do numero de ciclos do delay (foto)
+    /* Petriodo do trigger: Tt = 10*10^-6
+     * Periodo da CPU: Tcpu = 1/24*10^6
+     * Numero de ciclos = Tt/Tcpu
+     * Numero de ciclos = 10*10^-6/(1/24*10^6)
+     * Numero de ciclos = 240
+     * */
+    __delay_cycles(240);
 
+    /* Coloca a saida do pino P2.4 em nivel logico baixo */
     CLR_BIT(P2OUT,BIT4);
 }
 
 
 /* Funcao para retornar o calculo da distancia no main */
 uint32_t medicao_distancia(){
-
     return distancia;
 }
 
@@ -96,12 +105,12 @@ void __attribute__ ((interrupt(TIMER1_B0_VECTOR))) TIMER1_B0_ISR (void)
     /* ToDo: validar P2IN para detecção da borda */
 
     /* Borda de subida */
-    if (TST_BIT(P2IN, BIT0)){   // -> Mudar para P2.1
-        timer_count_0 = TB1CCR1;   // -> Mudar para CCR2
+    if (TST_BIT(P2IN, BIT1)){
+        timer_count_0 = TB1CCR2;
     }
     /* Borda de descida */
     else {
-        timer_count_1 = TB1CCR1;   // -> Mudar para CCR2
+        timer_count_1 = TB1CCR2;
         distancia = timer_count_1 - timer_count_0; //calculo da distancia
 
         /* Acorda main
