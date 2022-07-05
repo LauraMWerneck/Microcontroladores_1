@@ -1,8 +1,11 @@
 /*
- * distancia.h
+ *  Modulo: distancia.h
  *
- *  Created on: 04/07/2022
- *      Author: laura
+ *  Nome: Laura Martin Werneck
+ *
+ *  Data: 04/07/2022
+ *
+ *  Descrição: Modulo com as funcoes criadas em  distancia.c
  */
 
 #ifndef DISTANCIA_H_
