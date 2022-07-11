@@ -38,6 +38,7 @@
 #include "bits.h"
 #include "gpio.h"
 #include "motor.h"
+#include "hc_sr04.h"
 
 #ifndef __MSP430FR2355__
 #error "Clock system not supported/tested for this device"
@@ -82,34 +83,44 @@ void init_clock_system(void) {
 
 
 int main(){
-    const char message[] = "ACK";
-    const char message_bin_data[] = { 65, 63, 87, 87};
+    //const char message[] = "ACK";
+    //const char message_bin_data[] = { 65, 63, 87, 87};
 
-    char my_data[8];
+    //char my_data[8];
 
     /* Desliga Watchdog */
     WDTCTL = WDTPW + WDTHOLD;
 
+
+#if defined (__MSP430FR2355__)
     /* Disable the GPIO power-on default high-impedance mode */
     PM5CTL0 &= ~LOCKLPM5;
+#endif
 
     /* Inicializa hardware */
     init_clock_system();
-    init_uart();
-    inicializa_motores();
+    /*Inicializacao da UART*/
+    //init_uart();
+    /*Inicializacao dos motores*/
+    //inicializa_motores();
+    /*Inicializacoes do sensor de distancia*/
+    config_timerB_1();
+    config_wd_as_timer();
+    init_sensor();
 
-    /* Led de depuração */
-    P1DIR |= BIT0;
+    volatile uint32_t distancia = 0;
 
     __bis_SR_register(GIE);
 
     while (1){
+
+
         /* Configura o recebimento de um pacote de 4 bytes */
-        uart_receive_package((uint8_t *)my_data, 1);
+        //uart_receive_package((uint8_t *)my_data, 1);
 
         /* Desliga a CPU enquanto pacote não chega */
-        __bis_SR_register(CPUOFF | GIE);
-
+        //__bis_SR_register(CPUOFF | GIE);
+/*
         switch (my_data[0]) {
         case 'f':
             motor_para_frente(1000);  //OBS: a velocidade esta inversamente proporcional
@@ -130,15 +141,22 @@ int main(){
 
         default:
             break;
-        }
+        }*/
 
 
         /* Envia resposta */
-        uart_send_package((uint8_t *)message, 4);
+        //uart_send_package((uint8_t *)message, 4);
 
-        /* Pisca LED para sinalizar que dados chegaram */
-        CPL_BIT(P1OUT,BIT0);
 
-        __bis_SR_register(CPUOFF | GIE);
+        /* Aciona o trigger para o sensor funcionar */
+        trigger();
+
+        /* Entra em modo de economia de energia */
+        __bis_SR_register(LPM0_bits + GIE);
+
+       distancia = medicao_distancia();
+
+        //__bis_SR_register(CPUOFF | GIE);
     }
 }
+
