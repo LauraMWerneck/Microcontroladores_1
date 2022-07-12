@@ -1,240 +1,166 @@
 /*
- * motor.c
+ * 08_main_uart.c
  *
- *  Created on: 06/06/2022
- *  Author: laura
+ *  Created on: Jun 4, 2020
+ *      Author: Renan Augusto Starke
+ *      Instituto Federal de Santa Catarina
+ *
+ *
+ *      - Exemplo de recepÃ§Ã£o e transmissÃ£o da USART
+ *      - CPU Ã© desligado atÃ© o recebimento dos dados.
+ *      - Uma mensagem de ACK Ã© enviado quando um pacote
+ *      Ã© recebido.
+ *
+ *      - Clock da CPU Ã© 24MHZ definido e uart_fr2355.h  devido a
+ *      configuraÃ§Ã£o do baudrate.
+ *
+ *      - VEJA uart_fr2355.c/.h
+ *
+ *               MSP430FR2355
+ *            -----------------
+ *        /|\|              XIN|-
+ *         | |                 |
+ *         --|RST          XOUT|-
+ *           |                 |
+ *           |    P4.3/UCA1TXD | --> TX
+ *           |                 |
+ *           |    P4.2/UCA1RXD | <-- RX
+ *           |                 |
  */
 
+
+/* System includes */
 #include <msp430.h>
 #include <stdint.h>
 
+/* Project includes */
+#include "uart_fr2355.h"
+#include "bits.h"
+#include "gpio.h"
 #include "motor.h"
+#include "hc_sr04.h"
 
-#define CONTAGEM_MAX_CCR 8000
-
-
-void config_timerB_3_as_pwm();
-
-enum {DESLIGADO, FRENTE, TRAS, ESQUERDA, DIREITA};
-
-struct estado_motores{
-    uint8_t direcao;
-    uint16_t velocidade;
-};
-
-volatile struct estado_motores estado_carrinho = {DESLIGADO, 0};
+#ifndef __MSP430FR2355__
+#error "Clock system not supported/tested for this device"
+#endif
 
 
+
+/**
+  * Configura sistema de clock para usar o Digitally Controlled Oscillator (DCO) em 24MHz
+  * Essa configuraÃ§Ã£o utiliza pinos para cristal externo.
+  */
+void init_clock_system(void) {
+
+    // Configure two FRAM wait state as required by the device data sheet for MCLK
+    // operation at 24MHz(beyond 8MHz) _before_ configuring the clock system.
+    FRCTL0 = FRCTLPW | NWAITS_2 ;
+
+    P2SEL1 |= BIT6 | BIT7;                       // P2.6~P2.7: crystal pins
+    do
+    {
+        CSCTL7 &= ~(XT1OFFG | DCOFFG);           // Clear XT1 and DCO fault flag
+        SFRIFG1 &= ~OFIFG;
+    } while (SFRIFG1 & OFIFG);                   // Test oscillator fault flag
+
+    __bis_SR_register(SCG0);                     // disable FLL
+    CSCTL3 |= SELREF__XT1CLK;                    // Set XT1 as FLL reference source
+    CSCTL0 = 0;                                  // clear DCO and MOD registers
+    CSCTL1 = DCORSEL_7;                          // Set DCO = 24MHz
+    CSCTL2 = FLLD_0 + 731;                       // DCOCLKDIV = 327358*731 / 1
+    __delay_cycles(3);
+    __bic_SR_register(SCG0);                     // enable FLL
+    while(CSCTL7 & (FLLUNLOCK0 | FLLUNLOCK1));   // FLL locked
+
+    /* CSCTL4 = SELMS__DCOCLKDIV | SELA__REFOCLK;
+     * set XT1 (~32768Hz) as ACLK source, ACLK = 32768Hz
+     * default DCOCLKDIV as MCLK and SMCLK source
+     - Selects the ACLK source.
+     * 00b = XT1CLK with divider (must be no more than 40 kHz)
+     * 01b = REFO (internal 32-kHz clock source)
+     * 10b = VLO (internal 10-kHz clock source) (1)   */
+    CSCTL4 = SELMS__DCOCLKDIV | SELA__REFOCLK;
+}
+
+
+int main(){
+    //const char message[] = "ACK";
+    //const char message_bin_data[] = { 65, 63, 87, 87};
+
+    //char my_data[8];
+
+    /* Desliga Watchdog */
+    WDTCTL = WDTPW + WDTHOLD;
+
+
+#if defined (__MSP430FR2355__)
+    /* Disable the GPIO power-on default high-impedance mode */
+    PM5CTL0 &= ~LOCKLPM5;
+#endif
+
+    /* Inicializa hardware */
+    init_clock_system();
+    /*Inicializacao da UART*/
+    //init_uart();
+    /*Inicializacao dos motores*/
+    //inicializa_motores();
+    /*Inicializacoes do sensor de distancia*/
+    config_timerB_1();
+    config_wd_as_timer();
+    init_sensor();
+
+
+    volatile uint32_t distancia = 0;
+
+    __bis_SR_register(GIE);
+
+    while (1){
+
+
+        /* Configura o recebimento de um pacote de 4 bytes */
+        //uart_receive_package((uint8_t *)my_data, 1);
+
+        /* Desliga a CPU enquanto pacote nÃ£o chega */
+        //__bis_SR_register(CPUOFF | GIE);
 /*
- * Configura temporizador B3 com contagem up e down.
- */
-void config_timerB_3_as_pwm(){
+        switch (my_data[0]) {
+        case 'f':
+            motor_para_frente(1000);  //OBS: a velocidade esta inversamente proporcional
+            break;
+        case 't':
+            motor_para_tras(1000);
+            break;
+        case 'd':
+            motor_para_direita(1000);
+            break;
+        case 'e':
+            motor_para_esquerda(1000);
+            break;
+        case 'o':
+            motor_desligado();
 
-    /* Estamos usando TB3CCR0 para contagem máxima
-     * que permite controle preciso sobre o período
-     * é possível usar o overflow */
+            break;
 
-    /* Configuração dos comparadores como PWM:
-     *
-     * TB3CCR0: Timer3_B Capture/Compare 0: período do PWM
-     *
-     * OUTMOD_2: PWM output mode: 2 - PWM toggle/reset
-     *
-     * TB3CCR1 PWM duty cycle: TB3CCR1 / TB3CCR0 *
-     * TA2CCR1 PWM duty cycle: TA2CCR1 / TA1CCR0 */
-
-    TB3CCR0 = CONTAGEM_MAX_CCR-1;
-
-
-    /*      .
-     *      /|\                  +                < -Comparador 0: (máximo da contagem) -> período do PWM
-     *       |                 +   +
-     *       |               +       +
-     *       |-------------+---------- +          <--  Comparadores 1 e 2: razão cíclica
-     *       |           +  |         | +
-     *       |         +    |         |   +
-     *       |       +      |         |     +
-     *       |     +        |         |       +
-     *       |   +          |         |         +
-     *       | +            |         |           +
-     * Timer +--------------|---- ----|-------------->
-     *       |              |
-     *       |
-     *
-     *       |--------------+         |--------------
-     * Saída |              |         |
-     *       +---------------++++++++++------------->
-     */
-
-    /* TBSSEL_2 -> Timer B clock source select: 2 - SMCLK
-     * MC_1     -> Timer B mode control: 1 - Up to CCR0
-     * ID_3     ->  Timer B input divider: 3 - /8
-     *
-     * Configuração da fonte do clock do timer 1 */
-    TB3CTL = TBSSEL_2 | MC_3 | ID_0;
-}
-
-void inicializa_motores(){
-
-    config_timerB_3_as_pwm();
+        default:
+            break;
+        }*/
 
 
-    /* Ligação físicas do timer nas portas */
-    /* TB3.1 é o P6.0
-     * TB3.2 é o P6.1
-     *
-     * P6.0 e P6.1 geram mesmo sinal PWM
-     *
-     * TB3.3 é o P6.2
-     * TB3.4 é o P6.3
-     *
-     * P6.2 e P6.3 geram mesmo sinal PWM
-     *
-     * */
-    P6DIR = BIT0 | BIT1 | BIT2 | BIT3;
-
-    P6OUT = 0;
-
-    /* Função alternativa: ligação dos pinos no temporizador
-     *
-     * P6.0 -> TB3.1
-     * P6.1 -> TB3.2
-     * P6.2 -> TB3.3
-     * P6.3 -> TB3.4
-     * */
-    P6SEL0 = BIT0 | BIT1 | BIT2 | BIT3;
-
-}
-
-void motor_para_frente(uint16_t x){
-
-    TB3CCTL1 = OUTMOD_6;
-    TB3CCTL2 = OUTMOD_0;
-    TB3CCTL3 = OUTMOD_6;
-    TB3CCTL4 = OUTMOD_0;
-
-    TB3CCR1 = x;
-    TB3CCR3 = x;
-
-    estado_carrinho.direcao = FRENTE;
-    estado_carrinho.velocidade = x;
-
-}
-
-void motor_para_tras(uint16_t x){
-
-    TB3CCTL1 = OUTMOD_0;
-    TB3CCTL2 = OUTMOD_6;
-    TB3CCTL3 = OUTMOD_0;
-    TB3CCTL4 = OUTMOD_6;
-
-    TB3CCR2 = x;
-    TB3CCR4 = x;
-
-    estado_carrinho.direcao = TRAS;
-    estado_carrinho.velocidade = x;
-
-}
-
-void motor_para_direita(uint16_t x){
-
-    TB3CCTL1 = OUTMOD_6;
-    TB3CCTL2 = OUTMOD_0;
-    TB3CCTL3 = OUTMOD_0;
-    TB3CCTL4 = OUTMOD_6;
-
-    TB3CCR1 = x;
-    TB3CCR4 = x;
-
-    estado_carrinho.direcao = DIREITA;
-    estado_carrinho.velocidade = x;
-
-}
+        /* Envia resposta */
+        //uart_send_package((uint8_t *)message, 4);
 
 
-void motor_para_esquerda(uint16_t x){
+        /* Aciona o trigger para o sensor funcionar */
+        trigger();
 
-    TB3CCTL1 = OUTMOD_0;
-    TB3CCTL2 = OUTMOD_6;
-    TB3CCTL3 = OUTMOD_6;
-    TB3CCTL4 = OUTMOD_0;
+        /* Entra em modo de economia de energia */
+        __bis_SR_register(LPM0_bits + GIE);
 
-    TB3CCR2 = x;
-    TB3CCR3 = x;
+       distancia = medicao_distancia();
 
-    estado_carrinho.direcao = ESQUERDA;
-    estado_carrinho.velocidade = x;
-
-}
-
-void motor_desligado(){
-
-    TB3CCTL1 = OUTMOD_0;
-    TB3CCTL2 = OUTMOD_0;
-    TB3CCTL3 = OUTMOD_0;
-    TB3CCTL4 = OUTMOD_0;
-
-
-}
-
-/* Muda a razao ciclica para + 10% do valor máximo (8000)*/
-void muda_razao_ciclica(){
-
-    estado_carrinho.velocidade = estado_carrinho.velocidade - 800;
-
-    if (estado_carrinho.velocidade > CONTAGEM_MAX_CCR){
-        estado_carrinho.velocidade = 6000;
-    }
-
-    switch(estado_carrinho.direcao){
-    case FRENTE:
-        motor_para_frente(estado_carrinho.velocidade);
-        break;
-    case TRAS:
-        motor_para_tras(estado_carrinho.velocidade);
-        break;
-    case DIREITA:
-        motor_para_direita(estado_carrinho.velocidade);
-        break;
-    case ESQUERDA:
-        motor_para_esquerda(estado_carrinho.velocidade);
-        break;
-    default:
-        break;
+        //__bis_SR_register(CPUOFF | GIE);
     }
 }
-
-
-void muda_sentido(){
-
-    switch (estado_carrinho.direcao) {
-    case DESLIGADO:
-        motor_para_frente(4000);
-        break;
-    case FRENTE:
-        motor_para_tras(4000);
-        break;
-    case TRAS:
-        motor_para_direita(4000);
-        break;
-    case DIREITA:
-        motor_para_esquerda(4000);
-        break;
-    case ESQUERDA:
-        estado_carrinho.direcao = DESLIGADO;
-
-        TB3CCTL1 = OUTMOD_0;
-        TB3CCTL2 = OUTMOD_0;
-        TB3CCTL3 = OUTMOD_0;
-        TB3CCTL4 = OUTMOD_0;
-
-        break;
-
-    default:
-        break;
-    }
-}
-
 
 
 
